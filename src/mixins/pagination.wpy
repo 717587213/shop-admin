@@ -23,9 +23,8 @@
         if (this.page.reachBottom) {
           return;
         }
-        if (!this.page.next) {
-          console.warn('[page] this.page.next is null');
-          return;
+        if (this.page.start != 0) {
+          Tips.setLoading();
         }
         this.isPageLoading = true;
         const param = this.params ? this.params() : {};
@@ -54,11 +53,10 @@
      * 重新加载
      */
     async reload () {
-      if (this.page && this.page.reset) {
-        this.page.reset();
-        await this.next();
-        wepy.stopPullDownRefresh();
-      }
+      Tips.setLoading();
+      this.page.reset();
+      await this.next();
+      wepy.stopPullDownRefresh();
     }
 
     /**

@@ -1,8 +1,7 @@
-// const prod = process.env.NODE_ENV === 'production';
-const prod = true;
+const prod = process.env.NODE_ENV === 'production';
+
 module.exports = {
   wpyExt: '.wpy',
-  cliLogs: false,
   build: {
     web: {
     }
@@ -10,7 +9,7 @@ module.exports = {
   eslint: true,
   compilers: {
     sass: {
-      outputStyle: 'compressed'
+      outputStyle: 'compact'
     },
     babel: {
       sourceMap: false,
@@ -19,9 +18,9 @@ module.exports = {
         'stage-1'
       ],
       plugins: [
+        'transform-decorators-legacy',
         'transform-export-extensions',
-        'syntax-export-extensions',
-        'transform-decorators-legacy'
+        'syntax-export-extensions'
       ]
     }
   },
@@ -53,6 +52,9 @@ if (prod) {
       config: {
       }
     },
+    filemin: {
+      filter: /\.(wxml)$/
+    },
     imagemin: {
       filter: /\.(jpg|png|jpeg)$/,
       config: {
@@ -63,9 +65,6 @@ if (prod) {
           quality: 80
         }
       }
-    },
-    filemin: {
-      filter: /\.(wxml)$/
     }
   }
 }

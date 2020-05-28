@@ -141,11 +141,10 @@ export default class Validate {
   static optional(value) {
     return !this.required(value) && 'dependency-mismatch'
   }
-
-  /***
-   * 验证金额
+  /**
+   * 判断升级条件
    */
-  static money(value) {
-    return this.optional(value) || /(^[1-9]([0-9]+)?(\.[0-9]{1,2})?$)|(^(0){1}$)|(^[0-9]\.[0-9]([0-9])?$)/.test(value)
+  static upgradeFee(value, param) {
+    return (param - value) > 0 || param == null;
   }
 }

@@ -6,7 +6,8 @@
   import wepy from 'wepy'
   export default class VCode extends wepy.component {
     props = {
-      tap: {}
+      tap: {},
+      phone: {}
     };
     data = {
       display: false,
@@ -51,8 +52,4 @@
 
 <style lang="scss">
   @import "../../styles/variable";
-  .weui-vcode-btn {
-    color:$color-primary;
-  }
-
 </style>

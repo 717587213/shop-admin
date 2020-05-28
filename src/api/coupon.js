@@ -1,179 +1,151 @@
 import base from './base';
 import Page from '../utils/Page';
 
-/**
- * 卡券服务类
- */
 export default class coupon extends base {
   /**
-   * 返回分页对象
+   * 客户历史订单分页
+   * @param customerId
+   * @returns {Promise.<Pagination>}
    */
-  static page () {
-    const url = `${this.baseUrl}/coupons?by=accept_time&sort=desc`;
-    return new Page(url, this._processCouponItem.bind(this));
-  }
-
-  /***
-   * 优惠券详情
-   */
-  static couponDetail(couponId) {
-    const url = `${this.baseUrl}/coupons/${couponId}`;
-    return this.get(url).then(data => this._processPickItem(data));
+  static async cutomerCouponPage (customerId) {
+    const url = `${this.baseUrl}/customers/${customerId}/coupon_list`;
+    return new Page(url, this._processCustomerCouponItem.bind(this));
   }
 
   /**
-   * 获取可领取、已领取的优惠券
+   * 处理客户优惠券
+   * @param item
+   * @private
    */
-  static all () {
-    const url = `${this.baseUrl}/coupons/all`;
-    return this.get(url).then(({owned, show}) => {
-      const pickCoupons = this.processCouponsList(show, this._processPickItem.bind(this));
-      const ownCoupons = this.processCouponsList(owned, this._processCouponItem.bind(this));
-      return {pickCoupons, ownCoupons};
-    });
-  }
-  static processCouponsList(data, func) {
-    if (data && data.length > 0) {
-      return data.map(func);
-    } else {
-      return [];
+  static _processCustomerCouponItem(item) {
+    if (item.coupon == null) {
+      return;
+    }
+    Object.assign(item, item.coupon);
+
+    item.acceptTime = this._convertTimestapeToDay(item.acceptTime);
+    item.beginTime = this._convertTimestapeToDay(item.beginTime);
+    item.dueTime = this._convertTimestapeToDay(item.dueTime);
+    item.name = item.name ? item.name : '优惠券';
+
+    switch (item.status) {
+      case 'USED':
+        item.status = '已使用';
+        break;
+      case 'NEVER_USED':
+        item.status = '未使用';
+        break;
+      case 'EXPIRED':
+        item.status = '已过期';
+        break;
+      default:
+        item.status = '已失效'
     }
   }
 
   /**
-   * 目前可以领取的优惠券
+   * 分页方法
    */
-  static list () {
-    const url = `${this.baseUrl}/coupons/show`;
-    return this.get(url).then(pickList => {
-      if (pickList && pickList.length > 0) {
-        return pickList.map(this._processPickItem.bind(this));
-      } else {
-        return [];
-      }
-    });
+  static page () {
+    const url = `${this.baseUrl}/coupons`;
+    return new Page(url, this.processCouponItem.bind(this));
   }
+
   /**
-   * 查找目前已领取的优惠券
+   * 优惠券使用情况分页方法
    */
-  static own (status = 'NEVER_USED') {
-    const url = `${this.baseUrl}/coupons/list?status=${status}`;
-    return this.get(url).then(ownList => {
-      if (ownList && ownList.length > 0) {
-        return ownList.map(this._processCouponItem.bind(this));
-      } else {
-        return [];
-      }
-    });
+  static pagePick (couponId, type) {
+    if (type == 'NEVER_USED') {
+      const url = `${this.baseUrl}/coupons/${couponId}/used_info`;
+      return new Page(url, this.processCouponNeverUsed.bind(this));
+    } else {
+      const url = `${this.baseUrl}/coupons/${couponId}/used_info`;
+      return new Page(url, this.processCouponUsed.bind(this));
+    }
   }
+
   /**
-   * 领取卡券
+   * 新增卡券
    */
-  static pick (couponId) {
-    const url = `${this.baseUrl}/coupons/${couponId}/get`;
-    return this.get(url);
+  static async create (coupon) {
+    const url = `${this.baseUrl}/coupons`;
+    return await this.post(url, coupon);
   }
+
   /**
    * 删除卡券
    */
-  static remove (acceptId) {
-    const url = `${this.baseUrl}/coupons/${acceptId}`;
-    return this.delete(url);
-  }
-  /**
-   * 使用卡券
-   */
-  static use(id) {
-    const url = `${this.baseUrl}/coupons/use/${id}`;
-    return this.put(url);
+  static async remove (couponId) {
+    const url = `${this.baseUrl}/coupons/${couponId}`;
+    return await this.delete(url);
   }
 
   /**
-   * 获取可用的卡券信息
+   * 查询卡券信息
    */
-  static available (goodsList) {
-    const url = `${this.baseUrl}/coupons/order_available`;
-    const param = {orderGoodsInfos: goodsList};
-    return this.post(url, param).then(data => {
-      return data ? data.map(coupon => this._processCouponItem(coupon)) : [];
-    });
-  }
-  /**
-   * 获取活动中的卡券
-   */
-  static campaign(visit) {
-    const url = `${this.baseUrl}/coupons/campaign`;
-    return this.post(url, visit);
-  }
-  /**
-   * 根据id查询卡券详情
-   */
-  static detail(id) {
-    const url = `${this.baseUrl}/coupons/info/${id}`;
+  static info (couponId) {
+    const url = `${this.baseUrl}/coupons/${couponId}`;
     return this.get(url).then(data => {
-      return this._processCouponItem(data)
+      this.processCouponItem(data);
+      return data;
     });
   }
+
   /**
-   * 处理可以领取的优惠券
+   * 编辑卡券
    */
-  static _processPickItem (coupon) {
-    coupon.beginTime = this._convertTimestapeToDay(coupon.beginTime);
-    coupon.dueTime = this._convertTimestapeToDay(coupon.dueTime);
-    return coupon;
+  static async update (couponId, coupon) {
+    const url = `${this.baseUrl}/coupons/${couponId}`;
+    return await this.put(url, coupon);
   }
+
   /**
-   * 处理已拥有的优惠券
+   * 使用卡券
    */
-  static _processCouponItem (data) {
-    const root = data;
-    if (data.coupon == null) {
-      return null;
-    }
-    const coupon = data.coupon;
-    coupon.orderId = root.orderId;
-    coupon.imgUrl = root.imgUrl;
-    coupon.status = root.status;
-    coupon.id = root.id;
-    coupon.couponId = root.couponId;
-    coupon.acceptTime = root.acceptTime;
-    coupon.usedTime = root.usedTime;
-    if (coupon.expiredType === 'FIX_TERM') {
-      coupon.isUse = (new Date(data.beginTime.replace(/-/g, '/')) - new Date()) <= 0;
-      coupon.beginTime = this._convertTimestapeToDay(data.beginTime);
-      coupon.dueTime = this._convertTimestapeToDay(data.dueTime);
-    } else {
-      coupon.isUse = (new Date(data.beginTime.replace(/-/g, '/')) - new Date()) <= 0;
-      coupon.beginTime = this._convertTimestapeToDay(coupon.beginTime);
-      coupon.dueTime = this._convertTimestapeToDay(coupon.dueTime);
-    }
-    this._processCouponDisplayFlag(coupon);
-    return coupon;
+  static async use (id) {
+    const url = `${this.baseUrl}/coupons/use/${id}`;
+    return await this.put(url);
   }
+
   /**
-   * 处理卡券展示标签
+   * 数据处理
    */
-  static _processCouponDisplayFlag (coupon) {
-    if (coupon.status != 'NEVER_USED') {
+  static processCouponItem (coupon) {
+    if (coupon == null) {
       return;
     }
-    const acceptTimeInterval = this._dayIntervalToNow(coupon.acceptTime);
-    if (acceptTimeInterval <= 1) {
-      coupon.isNew = true;
+    coupon.beginTime = this._convertTimestapeToDay(coupon.beginTime);
+    coupon.dueTime = this._convertTimestapeToDay(coupon.dueTime);
+    coupon.name = coupon.name ? coupon.name : '优惠券';
+  }
+
+  /**
+   * 优惠券使用未使用情况数据处理
+   */
+  static processCouponNeverUsed (item) {
+    const coupon = {};
+    if (item.customer) {
+      coupon.name = item.customer.nickName;
+      coupon.avatar = item.customer.avatarUrl;
     }
-    const dueTimeInterval = this._dayIntervalToNow(coupon.dueTime);
-    if (dueTimeInterval >= -1) {
-      coupon.isExpiring = true;
-    }
+    coupon.key = '领取时间';
+    coupon.value = item.acceptTime;
+    return coupon;
   }
   /**
-   * 计算时间间隔
+   * 优惠券使用已使用情况数据处理
    */
-  static _dayIntervalToNow (dateStr) {
-    const MS_OF_DAY = 86400000;
-    const date = Date.parse(dateStr);
-    return Math.round((Date.now() - date) / MS_OF_DAY);
+  static processCouponUsed (item) {
+    const coupon = {};
+    if (item.customer) {
+      coupon.name = item.customer.nickName;
+      coupon.avatar = item.customer.avatarUrl;
+    }
+    coupon.key = '使用时间';
+    coupon.value = item.usedTime;
+    return coupon;
   }
+
   /**
    * 处理时间格式
    */
@@ -186,5 +158,12 @@ export default class coupon extends base {
       temp = timestape.substring(0, timestape.indexOf(' '));
     }
     return temp.replace(/-/g, '.');
+  }
+  /**
+   * 卖家发放优惠券给买家数据处理
+   */
+  static async send (coupon) {
+    const url = `${this.baseUrl}/coupons/send`;
+    return await this.post(url, coupon);
   }
 }

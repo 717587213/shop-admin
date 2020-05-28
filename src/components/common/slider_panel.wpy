@@ -5,7 +5,7 @@
   <!--滑动面板-->
   <view class="slider-panel-box {{display == 'true' ? 'slider-panel-show' : '' }} " style="min-height: {{minHeight}}">
     <!--面板标题-->
-    <view class="header-box" wx:if="{{header == 'true'}}">
+    <view class="header-box">
       <!--标题槽位-->
       <view class="title-box">
         <slot name="title"></slot>
@@ -13,7 +13,7 @@
 
       <!--关闭按钮-->
       <view class="close-box">
-        <icon class="close" color="gray" @tap="close"/>
+        <image class="icon" @tap="close" src="/images/icons/close.png" />
       </view>
     </view>
 
@@ -40,9 +40,6 @@
       },
       backgroundColor: {
         default: '#F8F8F8'
-      },
-      header: {
-        default: 'true'
       },
       minHeight: {
         default: 0

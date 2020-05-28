@@ -93,6 +93,7 @@ function addNotices(newNotice) {
  */
 
 function removeNotification(name,observer) {
+    console.log("removeNotification:" + name);
     for (var i = 0; i < __notices.length; i++){
       var notice = __notices[i];
       if(notice.name === name){

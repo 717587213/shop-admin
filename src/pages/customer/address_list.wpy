@@ -1,62 +1,41 @@
 <template>
-  <view wx:if="{{init}}">
-    <!--列表展现-->
-    <repeat for="{{page.list}}" key="index" index="index" item="item">
-      <Address :address.sync="item"/>
+  <view class="container" wx:if="{{init}}">
+    <repeat for="{{addressList}}" key="index" index="index" item="item">
+      <AddressItem :address.sync="item"></AddressItem>
     </repeat>
-
-    <ActionBar @tap.user="add" okText="添加地址" cancelText="返回" />
-
-    <!-- 加载提示 -->
-    <Loadmore :page.sync="page"/>
-
-    <!--占位符-->
-    <Placeholder :show.sync="isPageEmpty" message="您还没有收货地址" @tap.user="add"/>
   </view>
 </template>
 
 <script>
   import wepy from 'wepy';
   import base from '../../mixins/base';
-  import address from '../../api/address';
-  import pagination from '../../mixins/pagination';
-  import Placeholder from '../../components/common/placeholder';
-  import Loadmore from '../../components/weui/loadmore';
-  import Address from '../../components/address/manage_item';
-  import ActionBar from '../../components/common/action_bar'
-  import Event from '../../utils/Event'
+  import customerInfo from '../../api/customer_info';
+  import AddressItem from '../../components/common/address';
 
   export default class AddressList extends wepy.page {
-    data = {
+    def = {
       init: false,
-      page: {
-        list: [
-        ]
-      }
+      addressList: []
     };
-    methods = {
-      add() {
-        this.$navigate('/pages/address/edit?mode=create');
-      }
+    data = {...this.def};
+
+    async onLoad(options) {
+      console.log(options);
+      this.addressList = await customerInfo.addressList(options.customerId);
+
+      this.loaded();
     };
-    async onLoad () {
-      this.page = address.page();
-      await this.next();
-      Event.listen(Event.ADDRESS_LIST_UPDATE, this.update.bind(this), this);
-    };
-    async update (isCreate) {
-      this.reload();
-    }
+
+    mixins = [base];
+
+    methods = {};
+
+    events = {};
     components = {
-      Placeholder: Placeholder,
-      Loadmore: Loadmore,
-      Address: Address,
-      ActionBar: ActionBar
+      AddressItem: AddressItem
     };
-    mixins = [base, pagination];
     config = {
-      navigationBarTitleText: '收货地址',
-      enablePullDownRefresh: true
+      navigationBarTitleText: '地址列表'
     };
   }
 </script>

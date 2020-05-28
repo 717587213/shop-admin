@@ -41,8 +41,6 @@ export default class Lang {
   static convertTimestapeToDay(timestape) {
     return timestape.substring(0, timestape.indexOf(' ')).replace(/-/g, '.');
   }
-
-  // 格式化日期
   static dateFormate (date, fmt) {
     const o = {
       'M+': date.getMonth() + 1,
@@ -58,22 +56,5 @@ export default class Lang {
       if (new RegExp('(' + k + ')').test(fmt)) fmt = fmt.replace(RegExp.$1, (RegExp.$1.length == 1) ? (o[k]) : (('00' + o[k]).substr(('' + o[k]).length)));
     }
     return fmt;
-  }
-
-  // 格式化价格
-  static _fixedPrice (price) {
-    if (price == null || isNaN(Number(price))) {
-      return null;
-    }
-    return price.toFixed(2);
-  }
-
-  static guid() {
-    function s4() {
-      return Math.floor((1 + Math.random()) * 0x10000)
-        .toString(16)
-        .substring(1);
-    }
-    return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4();
   }
 }

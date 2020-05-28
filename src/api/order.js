@@ -1,223 +1,129 @@
 import base from './base';
 import Page from '../utils/Page';
 import {TYPE, ACTION, orderUtils as utils} from './order_const';
-import WxUtils from '../utils/WxUtils';
-import Lang from '../utils/Lang';
 
-/**
- * 订单服务类
- */
 export default class order extends base {
+  static closeReacon = [
+    '已缺货无法交易', '协商取消交易', '已通过货到付款交易', '无法联系上买家', '买家误拍或重拍', '其他'
+  ];
   /**
-   * 返回分页对象
+   * 分页方法
    */
-  static page () {
-    const url = `${this.baseUrl}/orders/list`;
+  static hisPage() {
+    const url = `${this.baseUrl}/customers/order_list`;
     return new Page(url, this._processOrderListItem.bind(this));
   }
 
   /**
-   * 获取订单统计信息
+   * 分页方法
    */
-  static count () {
-    const url = `${this.baseUrl}/orders/count`;
-    return this.get(url).then(data => {
-      const result = {};
-      data.forEach(({status, total}) => {
-        result[status] = total;
-      });
-      return result;
-    });
+  static page() {
+    const url = `${this.baseUrl}/orders`;
+    return new Page(url, this._processOrderListItem.bind(this));
   }
 
   /**
-   * 获取订单详情
+   * 订单详情
    */
-  static getInfo (orderId) {
+  static async detail(orderId) {
     const url = `${this.baseUrl}/orders/${orderId}`;
-    return this.get(url, {}).then(detail => this._processOrderDetail(detail));
+    const data = await this.get(url);
+    return this._processOrderDetail(data);
   }
 
   /**
-   * 生成预支付订单
+   * 物流发货
    */
-  static prepayOrder (orderId) {
-    const url = `${this.baseUrl}/wxpay/orders/${orderId}`;
-    return this.get(url, {});
+  static async send(orderId, param) {
+    const url = `${this.baseUrl}/orders/${orderId}/send`;
+    return await this.put(url, param);
   }
 
   /**
-   * 拉起微信支付
+   * 订单备注
    */
-  static wxpayOrder (payment) {
-    return WxUtils.wxPay({
-      'timeStamp': payment.timeStamp,
-      'nonceStr': payment.nonceStr,
-      'package': payment.packageValue,
-      'signType': 'MD5',
-      'paySign': payment.paySign
-    });
+  static async note(orderId, sellerNote) {
+    const url = `${this.baseUrl}/orders/${orderId}/note`;
+    const param = {sellerNote};
+    return await this.put(url, param);
   }
 
   /**
-   * 创建订单
+   * 订单打印
    */
-  static createOrder (trade, address) {
-    const url = `${this.baseUrl}/orders`;
-    this._processOrderAddress(trade, address);
-    return this.post(url, trade);
-  }
-  /**
-   * 创建积分订单
-   */
-  static createBonusOrder (trade) {
-    const url = `${this.baseUrl}/orders`;
-    return this.post(url, trade);
-  }
-
-  /**
-   * 申请退款
-   */
-  static refundOrder (orderId, refund) {
-    const url = `${this.baseUrl}/orders/${orderId}/status/refund`;
-    return this.put(url, refund);
-  }
-
-  /**
-   *  取消退款
-   */
-  static cancelRefundOrder (orderId, refundUuid) {
-    const url = `${this.baseUrl}/orders/${orderId}/status/cancel_refund_money`;
-    const param = {
-      refundUuid: refundUuid
-    };
-    return this.put(url, param);
+  static async print(orderId) {
+    const url = `${this.baseUrl}/orders/${orderId}/print`;
+    return await this.put(url);
   }
 
   /**
    * 关闭订单
    */
-  static closeOrder (orderId) {
+  static async close(orderId, note) {
     const url = `${this.baseUrl}/orders/${orderId}/status/close`;
-    return this.put(url, '买家关闭');
+    const param = {orderId, note};
+    return await this.put(url, param);
   }
-
   /**
    * 确认收货
    */
   static confirmOrder (orderId) {
-    const url = `${this.baseUrl}/orders/${orderId}/status/comments`;
-    return this.put(url);
+    const url = `${this.baseUrl}/orders/${orderId}/status/comments`
+    return this.put(url)
   }
-
-  /***
-   * 创建线下订单
-   */
-  static offline(param) {
-    const url = `${this.baseUrl}/orders/offline`;
-    return this.post(url, param);
-  }
-
-  /** ********************* 生成方法 ***********************/
-
   /**
-   * 购物车下单
+   * 接单
    */
-  static createCartTrade (goodsList, param) {
-    const orderGoodsInfos = [];
-    let price = 0;
-    // 根据购物车信息，构造订单的商品列表
-    for (let i in goodsList) {
-      const goods = goodsList[i];
-      const info = {
-        goodsId: goods.goodsId,
-        goodsName: goods.goodsName,
-        imageUrl: goods.goodsImage,
-        goodsPrice: goods.goodsPrice,
-        goodsFoodBoxFee: goods.goodsFoodBoxFee,
-        count: goods.goodsNum,
-        innerCid: goods.innerCid,
-        skuText: goods.skuText,
-        goodsSku: goods.goodsSku,
-        skuProperty: goods.skuProperty,
-        goodsSellPrice: goods.originalPrice,
-        discount: goods.discount,
-        discountRate: goods.discountRate,
-        discountText: goods.discountText,
-        goodsType: goods.goodsType,
-        limitCoupon: goods.limitCoupon,
-        maxCostBonus: goods.maxCostBonus,
-        limitBonus: goods.limitBonus,
-        paymentType: goods.paymentType
-      };
-      orderGoodsInfos.push(info);
-      price += goods.goodsPrice * goods.goodsNum;
-    }
-    let finalPrice = price;
-    let reduceFee = 0;
-    // 满减处理
-    if (param && param.reduce) {
-      reduceFee = param.reduce.fee;
-      finalPrice -= reduceFee;
-      if (finalPrice < 0) {
-        finalPrice = 0;
-      }
-    }
-    finalPrice = finalPrice.toFixed(2);
-    // 构造交易对象
-    const type = param.orderType;
-    const trade = {
-      orderType: type,
-      dealPrice: price.toFixed(2),
-      reduceFee: reduceFee,
-      finalPrice: finalPrice,
-      postFee: (0).toFixed(2),
-      paymentType: '1',
-      paymentText: '在线支付',
-      onlinePayType: 'wxpay',
-      onlinePayText: '微信支付',
-      orderGoodsInfos: orderGoodsInfos,
-      shopName: this.shopName
-    };
-    // 餐桌号
-    if (param.tableNum) {
-      trade.tableNum = param.tableNum
-    }
-    // 初始化订单类型标志位
-    this._processTypeFlag(trade);
-    // 堂食打包初始化出餐时间
-    if (trade.isInShopOrder) {
-      trade.arriveTime = '立即出餐';
-    }
-    return trade;
+  static take (orderId) {
+    const url = `${this.baseUrl}/orders/${orderId}/take_food_order`
+    return this.put(url)
+  }
+  /**
+  /**
+   * 订单改价
+   */
+  static async reprice(orderId, param) {
+    const url = `${this.baseUrl}/orders/${orderId}/modify_money`;
+    return await this.put(url, param);
   }
 
   /**
-   * 根据订单构造退款对象
+   * 同意退款
    */
-  static createOrderRefund (order) {
-    return {
-      orderId: order.orderId,
-      uuid: order.uuid,
-      type: 0,
-      contactName: order.receiveName,
-      contactPhone: order.receivePhone,
-      price: order.finalPrice
+  static async agreeRefund(orderId) {
+    const url = `${this.baseUrl}/orders/${orderId}/refund_money`;
+    const param = {
+      isAgree: 1
     };
+    return await this.put(url, param);
   }
+
+  /**
+   * 拒绝退款
+   */
+  static async rejectRefund(orderId, note) {
+    const url = `${this.baseUrl}/orders/${orderId}/refund_money`;
+    const param = {
+      isAgree: 2,
+      disagreeCause: note
+    };
+    return await this.put(url, param);
+  }
+
+  /** ********************* 退款处理 ********************* **/
 
   /**
    * 根据退款时间生成退款步骤
    */
 
-  static createOrderRefundSetps (refund) {
+  static createOrderRefundSetps(refund) {
     let steps = [];
 
     // 提交申请
     const creareTime = refund.createTime;
     if (creareTime) {
-      steps.push(this._createRefundSetp('您的取消申请已提交，请耐心等待', creareTime));
-      steps.push(this._createRefundSetp('等待卖家处理中,卖家24小时未处理将自动退款', creareTime));
+      steps.push(this._createRefundSetp('买家提交退款申请', creareTime));
+      steps.push(this._createRefundSetp('请您尽快处理，7天内未处理将自动退款给买家', creareTime));
     }
 
     // 卖家处理
@@ -225,11 +131,11 @@ export default class order extends base {
     if (sellerTime) {
       // 卖家同意
       if (refund.isAgree == 1) {
-        steps.push(this._createRefundSetp('卖家已同意退款', sellerTime));
-        steps.push(this._createRefundSetp('款项已原路退回中，请注意查收', sellerTime));
+        steps.push(this._createRefundSetp('您已同意退款', sellerTime));
+        steps.push(this._createRefundSetp('款项已原路退回买家', sellerTime));
       } else {
         // 卖家不同意
-        steps.push(this._createRefundSetp(`卖家不同意退款，原因：${refund.disagreeCause}`, sellerTime));
+        steps.push(this._createRefundSetp(`您拒绝退款，原因：${refund.disagreeCause}`, sellerTime));
       }
     }
 
@@ -237,25 +143,18 @@ export default class order extends base {
     const finishTime = refund.finishTime;
     if (finishTime) {
       // 卖家同意
-      if (refund.isAgree == 1) {
-        steps.push(this._createRefundSetp('退款成功', finishTime));
+      if (refund.is_agree == 1) {
+        steps.push(this._createRefundSetp('订单退款成功', finishTime));
       } else {
         // 卖家不同意
-        steps.push(this._createRefundSetp('退款关闭，请联系卖家处理', finishTime));
+        steps.push(this._createRefundSetp('订单退款关闭', finishTime));
       }
     }
 
     // 买家关闭
     const closeTime = refund.closeTime;
     if (closeTime) {
-      // 卖家同意
-      if (refund.isAgree == 2) {
-        steps.push(this._createRefundSetp('退款关闭，请联系卖家处理', finishTime));
-      } else if (refund.isAgree == 1) {
-        // 不需要
-      } else {
-        steps.push(this._createRefundSetp('买家取消退款，交易恢复', closeTime));
-      }
+      steps.push(this._createRefundSetp('买家取消退款，交易恢复', closeTime));
     }
 
     // 改变最后一个状态
@@ -268,7 +167,7 @@ export default class order extends base {
     return steps;
   }
 
-  static _createRefundSetp (text, time) {
+  static _createRefundSetp(text, time) {
     return {
       text: text,
       timestape: time,
@@ -277,59 +176,30 @@ export default class order extends base {
     };
   }
 
-  /** ********************* 数据处理方法 ***********************/
-
-  /**
-   * 处理订单动作
-   */
-  static _processOrderAction(order, inner = false) {
-    const basic = [];
-    // 有退款的情况
-    if (order.curRefund) {
-      basic.push(ACTION.REFUND_DETAIL);
-    }
-    const {orderType, paymentType, status} = order;
-    const actions = utils.statusActions(orderType, paymentType, status);
-    if (actions) {
-      const display = inner ? actions.filter(v => v.inner != true) : actions;
-      order.actions = basic.concat(display);
-    } else {
-      order.actions = basic;
-    }
-  }
-
-  /**
-   * 处理订单地址
-   */
-  static _processOrderAddress (order, address) {
-    if (utils.isDeliveryOrder(order.orderType)) {
-      order.receiveName = `${address.name} ${address.sexText}`;
-      order.receivePhone = address.phone;
-      order.address = address.fullAddress;
-    }
-  }
+  /** ********************* 数据处理方法 ********************* **/
 
   /**
    * 处理订单列表数据
    */
-  static _processOrderListItem (order) {
-    order.shopName = this.shopName;
-    // 处理订单状态
+  static _processOrderListItem(order) {
+    // 处理动作
+    this._processOrderAction(order);
     this._processOrderStatusDesc(order);
+    // 所有情况均展现动作条
+    order.isAction = true;
     // 处理订单价格
     this._processOrderPrice(order);
-    // 处理订单动作
-    this._processOrderAction(order, true);
     // 处理商品信息
     const goods = order.orderGoodsInfos;
     this._processOrderGoods(goods);
     // 处理离线支付
     this._processOfflinePayment(order);
   }
+
   /**
    * 处理订单详情
    */
-  static _processOrderDetail (detail) {
+  static _processOrderDetail(detail) {
     // 支付方式
     detail.shopName = this.shopName;
     // 处理订单支付方式
@@ -344,50 +214,56 @@ export default class order extends base {
     this._processOrderDetailDelivery(detail);
     // 处理订单价格
     this._processOrderPrice(detail);
-    // 处理订单动作
-    this._processOrderAction(detail);
+    // 处理地址信息
+    this._processOrderAddress(detail);
     // 处理商品信息
     this._processOrderGoods(detail.orderGoodsInfos);
-    // 处理标志位信息
-    this._processTypeFlag(detail);
+    // 处理动作
+    this._processOrderAction(detail, true);
     // 处理离线支付
     this._processOfflinePayment(detail);
-    // 商品是否为虚拟商品与虚拟类型
-    this._processIsDigit(detail);
     return detail;
   }
 
   static _processOfflinePayment(order) {
     const orderType = order.orderType;
-    if (order.orderGoodsInfos && order.orderGoodsInfos.length > 0) return;
-    const goods = {
-      imageUrl: 'http://img.leshare.shop/shop/other/wxpay.png',
-      goodsPrice: order.dealPrice,
+    if (orderType != TYPE.OFFLINE) return;
+    order.orderGoodsInfos = [{
+      imageUrl: 'http://img.leshare.shop/shop/other/wechat_pay.png',
+      goodsName: `微信支付 ${order.finalPrice}元`,
+      goodsPrice: order.finalPrice,
       count: 1
-    };
-    if (order.finalPrice == 0) {
-      goods.goodsName = `在线支付 ${order.dealPrice}元`;
-    } else if (orderType === TYPE.BALANCE) {
-      goods.goodsName = `余额充值 ${order.dealPrice}元`;
-    } else if (orderType === TYPE.OFFLINE && order.onlinePayType === 'balance') {
-      goods.goodsName = `余额支付 ${order.dealPrice}元`;
-      goods.imageUrl = 'http://img.leshare.shop/shop/other/topup.png';
-    }  else {
-      goods.goodsName = `微信支付 ${order.dealPrice}元`;
-    }
-    order.orderGoodsInfos = [goods];
+    }];
+    return order;
   }
 
   /**
-   * 处理标志位信息
+   * 处理订单动作
    */
-  static _processTypeFlag(order) {
-    const type = order.orderType;
-    order.isFoodOrder = utils.isFoodOrder(type);
-    order.isDeliveryOrder = utils.isDeliveryOrder(type);
-    order.isInShopOrder = utils.isInShopOrder(type);
-    order.isMallOrder = utils.isMallOrder(type);
-    return order;
+  static _processOrderAction(order, inner = false) {
+    const basic = [ACTION.REMARK];
+    if (inner) {
+      basic.push(ACTION.PRINT);
+    }
+    const {orderType, paymentType, status} = order;
+    const actions = utils.statusActions(orderType, paymentType, status);
+    if (actions) {
+      const display = inner ? actions.filter(v => v.inner != true) : actions;
+      order.actions = basic.concat(display);
+    } else {
+      order.actions = basic;
+    }
+  }
+
+  /**
+   * 处理地址信息
+   */
+  static _processOrderAddress(detail) {
+    detail.receiveAddress = {
+      fullAddress: detail.address,
+      name: detail.receiveName,
+      phone: detail.receivePhone
+    }
   }
 
   /**
@@ -397,19 +273,6 @@ export default class order extends base {
     detail.paymentText = utils.paymentType(detail.paymentType);
   }
 
-  /**
-   * 处理订单状态
-   */
-  static _processOrderPrice (order) {
-    order.postFee = Lang._fixedPrice(order.postFee);
-    order.dealPrice = Lang._fixedPrice(order.dealPrice);
-    order.finalPrice = Lang._fixedPrice(order.finalPrice);
-    order.couponPrice = Lang._fixedPrice(order.couponPrice);
-    order.pointUsed = Lang._fixedPrice(order.pointUsed);
-    order.reduceFee = Lang._fixedPrice(order.reduceFee);
-    order.bonusPrice = Lang._fixedPrice(order.bonusPrice);
-    order.foodBoxFee = Lang._fixedPrice(order.foodBoxFee);
-  }
 
   /**
    * 处理状态描述文本
@@ -424,47 +287,62 @@ export default class order extends base {
       order.statusDesc = `订单已关闭，关闭原因：${reason.note}`;
     }
   }
+
   /**
    * 处理物流配送信息
    */
   static _processOrderDetailDelivery (order) {
     order.deliveryText = utils.deliveryType(order.deliveryType);
   }
+  /**
+   * 处理订单状态
+   */
+  static _processOrderPrice(order) {
+    order.postFee = this._fixedPrice(order.postFee);
+    order.dealPrice = this._fixedPrice(order.dealPrice);
+    order.finalPrice = this._fixedPrice(order.finalPrice);
+    order.couponPrice = this._fixedPrice(order.couponPrice);
+    order.bonusPrice = this._fixedPrice(order.bonusPrice);
+  }
 
   /**
    * 处理商品物流信息
    */
-  static _processOrderTrace (order) {
+  static _processOrderTrace(order) {
     const express = order.orderExpress;
     if (express == null) {
       // 没有物流信息，不做处理
       return;
     }
+
     // 有物流，就一定需要展现动作列表
+    order.isAction = true;
     order.isExpress = true;
   }
 
   /**
    * 处理订单的退货信息
    */
-  static _processOrderRefund (order) {
+  static _processOrderRefund(order) {
     const refunds = order.orderRefunds;
     if (refunds == null || refunds.length < 1) {
       // 订单没有退款信息，不做处理
       return;
     }
+    // 展现第一个退款记录
+    const refund = refunds[refunds.length - 1];
+    // 曾经退款过，就一定需要展现退款记录
+    order.isAction = true;
+    // 控制展现退款详情字段
+    order.isRefund = true;
     // 取出第一条退款记录
-    order.curRefund = refunds[refunds.length - 1];
+    order.curRefund = refund;
   }
 
   /**
    * 处理订单商品信息
    */
-  static _processOrderGoods (goods) {
-    if (goods == null || goods.length < 1) return;
-    goods.forEach(item => {
-      item.imageUrl += '/small';
-    });
+  static _processOrderGoods(goods) {
     if (goods == null || goods.length < 1) {
       return;
     }
@@ -472,37 +350,24 @@ export default class order extends base {
       // 处理SKU描述
       const sku = item.goodsSku;
       item.skuText = this._processOrderSku(sku);
+      item.imageUrl += '/small';
     });
   }
 
   /**
    * 处理SKU的默认值
    */
-
-  static _processOrderSku (goodsSku) {
+  static _processOrderSku(goodsSku) {
     let skuText = '';
     if (goodsSku && goodsSku != '') {
       skuText = goodsSku.replace(/:/g, ',');
     }
     return skuText;
   }
-
-  /**
-   * 商品是否为虚拟商品
-   */
-  static _processIsDigit(detail) {
-    const goodsList = detail.orderGoodsInfos;
-    if (goodsList == null || goodsList.length < 1) {
-      detail.isDigit = false;
-      return;
-    } else if (goodsList[0].goods == null) {
-      detail.isDigit = false;
-      return;
-    } else {
-      detail.isDigit = detail.orderType == '90' || goodsList[0].goods.type == 'digit';
+  static _fixedPrice(price) {
+    if (price == null || isNaN(Number(price))) {
+      return null;
     }
-    if (detail.isDigit && goodsList[0].digitGoodsExchange) {
-      detail.digitType = goodsList[0].digitGoodsExchange.digitType;
-    }
+    return price.toFixed(2);
   }
 }

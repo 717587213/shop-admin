@@ -1,100 +1,79 @@
 <template>
-  <Loading :init.sync="init"/>
-  <view class="container" wx:if="{{init}}">
+  <view class="conatiner" wx:if="{{init}}">
     <!--TAB 页-->
     <ZanTab :tab.sync="tab" @change.user="switchTab" />
 
     <!--列表展现-->
     <repeat for="{{page.list}}" key="index" index="index" item="item">
-      <CouponItem :coupon.sync="item" @delete.user="delete" @select.user="detail"/>
+      <CouponItem :coupon.sync="item"></CouponItem>
     </repeat>
 
     <!-- 加载提示 -->
     <Loadmore :page.sync="page"/>
 
-    <ButtonWidget/>
+    <!--操作栏-->
+    <ActionBar @tap.user="add" okText="新增优惠券" cancelText="返回" />
 
     <!--占位符-->
-    <Placeholder :show.sync="isPageEmpty" message="您还没有相关优惠券" />
-
-    <!--广告栏-->
-    <view class="ad-banner" wx:if="{{adUnitId}}">
-      <ad unit-id="{{adUnitId}}"></ad>
-    </view>
+    <Placeholder :show.sync="isPageEmpty" message="您还没有相关卡券信息"/>
   </view>
 </template>
 
 <script>
   import wepy from 'wepy';
-  import shop from '../../api/shop';
   import base from '../../mixins/base';
   import coupon from '../../api/coupon';
-  import pagination from '../../mixins/pagination.wpy';
+  import pagination from '../../mixins/pagination';
   import Placeholder from '../../components/common/placeholder';
   import ZanTab from '../../components/zanui/tab';
-  import CouponItem from '../../components/coupons/display_item';
-  import Loadmore from '../../components/weui/loadmore';
+  import ActionBar from '../../components/common/action_bar';
+  import CouponItem from '../../components/coupon/item';
   import Event from '../../utils/Event';
-  import WxUtils from '../../utils/WxUtils';
-  import Loading from '../../components/common/loading';
-  import ButtonWidget from '../../components/template/button_widget';
+  import Loadmore from '../../components/weui/loadmore';
 
-  export default class CouponList extends wepy.page {
-    data = {
+  export default class CouponIndex extends wepy.page {
+    def = {
       init: false,
-      page: {},
-      tab: {
-        list: [{
-          id: 'NEVER_USED',
-          title: '未使用'
-        }, {
-          id: 'USED',
-          title: '已使用'
-        }, {
-          id: 'EXPIRED',
-          title: '已过期'
-        }],
-        selectedId: 'NEVER_USED',
-        scroll: false
+      page: {
+        list: [
+        ]
       },
-      adUnitId: null
+      tab: {
+        list: [
+          {id: 'USED', title: '进行中'},
+          {id: 'NEVER_USED', title: '未开始'},
+          {id: 'EXPIRED', title: '已失效'}
+        ],
+        selectedId: 'USED'
+      }
     };
+    data = {...this.def};
     async onLoad () {
       this.page = coupon.page();
-      Event.listen(Event.COUPON_LIST_UPDATE, this.update.bind(this), this);
       await this.next();
+      Event.listen(Event.COUPON_LIST_UPDATE, this.update.bind(this), this);
     };
     params() {
       return {status: this.tab.selectedId};
     }
     methods = {
-      detail(coupon) {
-        // if (coupon.status != 'NEVER_USED') {
-        //   return;
-        // }
-        this.$preload('couponId', coupon.id);
-        this.$navigate('detail');
-      },
       switchTab() {
         this.reload();
       },
-      use({detail}) {
-        shop.reportFormId(detail.formId);
-        WxUtils.backOrRedirect('/pages/shop/index');
+      add() {
+        this.$navigate('edit?mode=create');
       }
     };
-    events = {};
     components = {
       Placeholder: Placeholder,
       ZanTab: ZanTab,
-      Loadmore: Loadmore,
+      ActionBar: ActionBar,
       CouponItem: CouponItem,
-      Loading: Loading,
-      ButtonWidget: ButtonWidget
+      Loadmore: Loadmore
     };
     mixins = [base, pagination];
     config = {
-      navigationBarTitleText: '我的优惠券',
+      navigationBarTitleText: '卡券列表',
       enablePullDownRefresh: true
     };
   }
@@ -102,6 +81,4 @@
 
 <style lang="scss">
   @import "../../styles/variable";
-  .ad-banner{
-  }
 </style>

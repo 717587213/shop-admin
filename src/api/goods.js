@@ -1,196 +1,229 @@
+/* eslint-disable no-return-assign */
 import base from './base';
+import wepy from 'wepy';
 import Page from '../utils/Page';
 import Lang from '../utils/Lang';
 
-/**
- * 商品服务类
- */
 export default class goods extends base {
   /**
-   * 获取推荐
+   * 客户常购商品
    */
-  static recommend () {
-    let url = `${this.baseUrl}/goods/recommend`;
-    return new Page(url, item => {
-      this._processGoodsData(item);
+  static oftenGoodsPage(customerId) {
+    const url = `${this.baseUrl}/customers/${customerId}/order_goods_list`;
+    return new Page(url, this._processOftenItem.bind(this));
+  }
+
+  static _processOftenItem(item) {
+    item.name = item.goodsName;
+  }
+
+  /**
+   * 分页方法
+   */
+  static page() {
+    const url = `${this.baseUrl}/goods`;
+    return new Page(url, this._processGoodsListItem.bind(this));
+  }
+
+  static list() {
+    const url = `${this.baseUrl}/goods/list`;
+    return new Page(url, this._processGoodsListItem.bind(this));
+  }
+
+  /**
+   * 商品分类
+   */
+  static async getInnerCategories() {
+    const url = `${this.baseUrl}/goods/inner_category`;
+    return await this.get(url).then(data => {
+      return data == null ? [] : data;
     });
   }
 
   /**
-   * 新的分页方法
+   *  新增商品分类
    */
-  static list (discount) {
-    let url = `${this.baseUrl}/goods/list?is_new=1`;
-    return new Page(url, item => {
-      // this._processGoodsDiscount(item, discount);
-      // this._processGoodsData(item);
-    });
-  }
-
-  /**
-   * 新的分页方法
-   */
-  static listFood (discount) {
-    let url = `${this.baseUrl}/goods/list`;
-    return new Page(url, item => {
-      this._processGoodsDiscount(item, discount);
-      this._processGoodsData(item);
-    });
-  }
-  /**
-   * 积分商品分页方法
-   */
-  static listBonus (discount, bussType) {
-    let url = `${this.baseUrl}/goods/list?buss_type=${bussType}`;
-    return new Page(url, item => {
-      this._processGoodsDiscount(item, discount);
-      this._processGoodsData(item);
-    });
-  }
-
-  /**
-   * 获取商品库存
-   */
-  static stock (goodsId, sku = '') {
-    const url = `${this.baseUrl}/goods/${goodsId}/stock?sku=${sku}`;
-    return this.get(url).then(data => data.stock);
-  }
-
-  /**
-   * 查询商品目录
-   */
-  static categories (subShopId) {
-    let url = `${this.baseUrl}/goods/inner_category`;
-    if (subShopId) {
-      url += `?sub_shop_id=${subShopId}`;
-    }
-    return this.get(url).then(data => this._createGoodsCategories(data));
-  }
-
-  /**
-   * 查询商品详情
-   */
-  static getInfo (goodsId, discount) {
-    const url = `${this.baseUrl}/goods/${goodsId}`;
-    return this.get(url, {}).then(data => {
-      this._processGoodsDiscount(data, discount);
-      return this._processGoodsDetail(data)
-    });
-  }
-  /**
-   * 按商铺ID查询商品目录
-   */
-  static subShopCategory (subShopId) {
-    const url = `${this.baseUrl}/goods/inner_category?sub_shop_id=${subShopId}`;
-    return this.get(url).then(data => this._createGoodsCategories(data));
-  }
-  /***
-   * 归属门店店铺商品列表
-   */
-  static subShopGoodsList(discount) {
-    const url = `${this.baseUrl}/goods/sub_shop/list`;
-    return new Page(url, item => {
-      this._processGoodsDiscount(item, discount);
-      this._processGoodsData(item);
-    });
-  }
-
-  /** ********************* 数据处理方法 ***********************/
-
-  static _createGoodsCategories (data) {
-    const list = [];
-    if (data != null) {
-      list.push(...data.map(item => {
-        return {
-          id: item.id,
-          title: item.name,
-          bussType: item.bussType
-        };
-      }));
-    }
-    const selectedId = list.length > 0 ? list[0].id : null;
-    return {
-      list,
-      selectedId,
-      scroll: false
+  static async addInnerCategories(name) {
+    const url = `${this.baseUrl}/goods/inner_category`;
+    const param = {
+      name: name,
+      pid: 0,
+      seq: 0
     };
+    return await this.post(url, param);
   }
 
   /**
-   * 处理商品详情
+   * 获取单条商品分类信息
    */
-  static _processGoodsDetail (detail) {
-    // 解析预览图
-    this._processGoodsPreview(detail);
-
-    // 解析SKU规格
-    this._processSkuLable(detail);
-
-    // 处理价格范围区间
-    this._processGoodsPriceRange(detail);
-
-    // 处理价格标签
-    this._processGoodsPriceLabel(detail);
-
-    // 处理运费
-    this._processGoodsPostFeeText(detail);
-    return detail;
+  static async getInnerCategorieId(categoryId) {
+    let list = await this.getInnerCategories();
+    return list.find((item) => item.id == categoryId);
   }
 
   /**
-   * 处理折扣价格
+   *  更新商品分类
    */
-  static _processGoodsDiscount(goods, discount) {
-    const isDiscount = discount != null ? discount.categories.some(cid => cid == goods.innerCid) : false;
-    if (!isDiscount) {
-      return;
-    }
-    const rate = discount.rate / 100;
-    const isSku = goods.goodsSkuInfo;
-    if (isSku) {
-      // 多规格数据处理
-      const skuList = goods.goodsSkuInfo.goodsSkuDetails;
-      skuList.forEach(item => {
-        const detail = item.goodsSkuDetailBase;
-        const price = detail.price;
-        // 最低的价格作为原价
-        if (item.originalPrice == null || price < item.originalPrice) {
-          item.originalPrice = price;
-        }
-        // 设置原价和当前价格
-        detail.originalPrice = price;
-        detail.price = Lang._fixedPrice(price * rate);
+  static async updateInnerCategories(id, name) {
+    const url = `${this.baseUrl}/goods/inner_category`;
+    const param = {
+      name: name,
+      id: id,
+      pid: 0,
+      seq: 0
+    };
+    return await this.put(url, param);
+  }
+
+  /**
+   *  删除商品分类
+   */
+  static async removeInnerCategories(id) {
+    const url = `${this.baseUrl}/goods/inner_category/${id}`;
+    return await this.delete(url);
+  }
+
+  /**
+   * 上传图片
+   */
+  static async image(filePath) {
+    // const url = `${this.baseUrl}/images`;
+    const url = `${this.baseUrl}/images`;
+    const param = {
+      url,
+      filePath,
+      name: 'image'
+    };
+    return await wepy.uploadFile(param);
+  }
+
+  /**
+   * 创建商品
+   */
+  static async create(goods) {
+    const url = `${this.baseUrl}/goods`;
+    return await this.post(url, goods);
+  }
+
+  /**
+   * 更新商品
+   */
+  static async update(goodsId, goods) {
+    const url = `${this.baseUrl}/goods/${goodsId}`;
+    return await this.put(url, goods);
+  }
+
+  /**
+   * 删除商品
+   */
+  static async remove(goodsId) {
+    const url = `${this.baseUrl}/goods/${goodsId}`;
+    return await this.delete(url);
+  }
+
+  /**
+   * 商品详情
+   */
+  static async detail(goodsId) {
+    const url = `${this.baseUrl}/goods/${goodsId}`;
+    const data = await this.get(url);
+    return this._processGoodsDetail(data);
+  }
+
+  /**
+   * 商品上架
+   */
+  static async onSale(goodsId) {
+    const url = `${this.baseUrl}/goods/${goodsId}/on_sale`;
+    return this.put(url);
+  }
+
+  /**
+   * 商品下架
+   */
+  static async offSale(goodsId) {
+    const url = `${this.baseUrl}/goods/${goodsId}/off_sale`;
+    return this.put(url);
+  }
+
+  /** ********************* 内部数据处理方法 ********************* **/
+
+  static _processGoodsDetail(goods) {
+    const pictures = goods.images;
+    const input = {
+      name: goods.name,
+      status: goods.status == 0,
+      isRecommend: goods.isRecommend == 1,
+      globalCid: goods.globalCid,
+      innerCid: goods.innerCid,
+      goodsId: goods.id
+    };
+    let skuList;
+    const details = goods.goodsDetails ? goods.goodsDetails : [];
+    if (goods.goodsSkuInfo == null || goods.goodsSkuInfo.goodsSkuDetails == null) {
+      skuList = [{
+        price: goods.sellPrice,
+        stock: goods.goodsStocks[0].stock,
+        sku: null
+      }];
+    } else {
+      skuList = goods.goodsSkuInfo.goodsSkuDetails.map(item => {
+        const price = parseFloat(item.goodsSkuDetailBase.price).toFixed(2);
+        const sku = item.sku;
+        const stock = goods.goodsStocks.find(item => item.sku == sku).stock;
+        return {price, sku, stock};
       });
-    } else {
-      // 单规格数据处理
-      goods.originalPrice = goods.sellPrice;
-      goods.sellPrice = Lang._fixedPrice(goods.sellPrice * rate);
     }
-    // 折扣文本展现
-    goods.discountRate = discount.rate / 10 + '折';
-    goods.discountText = `会员折扣`;
-    goods.discount = true;
+    return {pictures, input, details, skuList};
   }
 
   /**
-   * 处理运费信息
+   * 处理商品列表数据
    */
-  static _processGoodsPostFeeText (detail) {
-    const fee = detail.postFee;
-    let feeText = '';
-    if (!fee || fee == 0) {
-      feeText = '配送：免运费';
-    } else {
-      feeText = `同城配送：￥${fee} (支持自提)`;
-    }
-    detail.feeText = feeText;
+  static _processGoodsListItem(goods) {
+    this._processGoodsPreview(goods);
+    this._processGoodsPriceRange(goods);
+    this._processGoodsSkuCount(goods);
+    this._processGoodsDate(goods);
+  }
+
+  static _processGoodsDate(item) {
+    item.createText = Lang.convertTimestapeToDay(item.createTime);
   }
 
   /**
-   * 处理价格商品区间
+   * 处理SKU数量
    */
-  static _processGoodsPriceRange (detail) {
+  static _processGoodsSkuCount(item) {
+    if (!item.goodsSkuInfo || !item.goodsSkuInfo.goodsSkuDetails) {
+      item.skuCount = 0;
+    } else {
+      item.skuCount = item.goodsSkuInfo.goodsSkuDetails.length;
+    }
+  }
+
+  /**
+   * 处理预览图
+   */
+  static _processGoodsPreview(item) {
+    const images = item.images;
+    // 图片处理
+    if (images == null || images.length < 1) {
+      item.imageUrl = '/images/icons/broken.png"';
+    } else if (images[0].url == null) {
+      item.imageUrl = '/images/icons/broken.png';
+    } else {
+      item.imageUrl = images[0].url + '/small';
+    }
+  }
+
+  /**
+   * 处理商品区间
+   */
+  static _processGoodsPriceRange(detail) {
     if (!detail.goodsSkuInfo || !detail.goodsSkuInfo.goodsSkuDetails) {
+      const price = parseFloat(detail.sellPrice).toFixed(2);
+      detail.priceText = `￥${price}`;
       return;
     }
     const skuDetails = detail.goodsSkuInfo.goodsSkuDetails;
@@ -199,105 +232,16 @@ export default class goods extends base {
 
     for (let i in skuDetails) {
       const detail = skuDetails[i].goodsSkuDetailBase;
-      maxPrice = Math.max(detail.price, maxPrice);
-      minPrice = Math.min(detail.price, minPrice);
+      maxPrice = Math.max(detail.price, maxPrice).toFixed(2);
+      minPrice = Math.min(detail.price, minPrice).toFixed(2);
     }
     detail.maxPrice = maxPrice;
     detail.minPrice = minPrice;
-  }
-
-  /**
-   * 处理价格展现标签 / 需要先调用区间处理
-   */
-  static _processGoodsPriceLabel (detail) {
-    let priceLable = detail.sellPrice;
-
-    if (detail.maxPrice && detail.minPrice) {
-      // priceLable = `${detail.minPrice}~${detail.maxPrice}`;
-      priceLable = detail.minPrice;
-    }
-    detail.priceLable = isNaN(detail.priceLable) ? priceLable : priceLable.toFixed(2);
-  }
-
-  /**
-   * 处理SKU标签
-   */
-  static _processSkuLable (detail) {
-    const skuInfo = detail.goodsSkuInfo;
-    if (!skuInfo) {
-      return;
-    }
-    const skuLabels = [];
-    for (let i = 1; i <= 3; i++) {
-      const skuKey = skuInfo[`prop${i}`];
-      const skuValueStr = skuInfo[`value${i}`];
-      if (skuKey && skuValueStr) {
-        const skuValues = skuValueStr.split(',');
-        const sku = {
-          key: skuKey,
-          value: skuValues
-        };
-        skuLabels.push(sku);
-      } else {
-        break;
-      }
-    }
-    detail.labels = skuLabels;
-  }
-
-  /**
-   * 处理商品信息
-   */
-  static _processGoodsData (item) {
-    // 结构赋值
-    const {name, sellPrice, originalPrice, subhead} = item;
-
-    // 长名字处理
-    if (name.length > 12) {
-      item.simple_name = name.substring(0, 12) + '...';
-    }
-    // 长名字处理
-    if (name.length > 30) {
-      item.name = name.substring(0, 30) + '...';
-    }
-
-    // 销售价处理
-    if (originalPrice == null || originalPrice == 0) {
-      item.originalPrice = sellPrice;
-    }
-
-    // 描述处理
-    if (subhead != null) {
-      item.subhead = subhead.replace(/\s/g, '');
-    }
-
-    // 处理图片
-    this._processGoodsPreview(item);
-    this._processSkuLable(item);
-    this._processGoodsPriceRange(item);
-    this._processGoodsPriceLabel(item);
-    this._processGoodsQuantity(item);
-  }
-
-  /**
-   * 处理数量（已购买）
-   */
-  static _processGoodsQuantity (item) {
-    item.num = 0;
-  }
-
-  /**
-   * 处理预览图
-   */
-  static _processGoodsPreview (item) {
-    const images = item.images;
-    // 图片处理
-    if (images == null || images.length < 1) {
-      item.imageUrl = '/images/icons/broken.png';
-    } else if (images[0].url == null) {
-      item.imageUrl = '/images/icons/broken.png';
+    if (maxPrice != minPrice) {
+      detail.priceText = `￥${minPrice} ~ ${maxPrice}`;
     } else {
-      item.imageUrl = images[0].url + '/medium';
+      detail.priceText = `￥${minPrice}`;
     }
   }
+
 }

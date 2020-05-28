@@ -1,12 +1,11 @@
 <template>
   <view class="inshop-box row-between">
     <view class="row" wx:if="{{order.orderType == '30'}}">
-      <icon class="inshop normal"/>
-      <text wx:if="{{order.tableNum}}">到店堂食（{{order.tableNum}}桌）</text>
-      <text wx:else>到店堂食</text>
+      <image class="icon" src="/images/icons/inshop.png" />
+      <text>到店堂食</text>
     </view>
     <view class="row"  wx:if="{{order.orderType == '33'}}">
-      <icon class="package normal"/>
+      <image class="icon" src="/images/icons/package.png" />
       <text>打包带走</text>
     </view>
     <text class="muted mr20 sm">{{order.arriveTime}}</text>

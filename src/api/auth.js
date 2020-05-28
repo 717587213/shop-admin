@@ -2,27 +2,38 @@ import base from './base'
 import wepy from 'wepy';
 
 export default class auth extends base {
-
   /**
-   * 检查二维码授权登录
+   * 检查登录状态
    */
-  static async checkQrCode(code) {
-    console.info('checkQrCode')
+  static isLogin() {
     const loginCode = this.getConfig('login_code');
-    const url = `${this.baseUrl}/auth/web_login/login_code?random_code=${code}&login_code=${loginCode}`;
-    const data = await this.post(url);
-    console.info(data);
+    return loginCode != null;
+  }
+  /**
+   * 登录
+   */
+  static async login(phone, code) {
+    const appCode = wepy.$instance.globalData.appCode;
+    const url = `${this.baseUrl}/auth/login?phone=${phone}&sms_code=${code}&app_code=${appCode}`;
+    const dara = await this.get(url);
+    return dara.login_code;
+  }
+  /**
+   * 短信验证码
+   */
+  static async sms (phone) {
+    const url = `${this.baseUrl}/auth/sms_code?phone=${phone}`;
+    const data = await this.get(url);
+    return data.message;
   }
 
   /**
-   * 获取会话
+   * 检查登录情况
    */
-  static async session() {
-    const {code} = await wepy.login();
-    console.info(`[auth] js_code =${code}`);
-    const {third_session, login_code} = await this.getSession(code);
-    await this.setConfig('login_code', login_code);
-    await this.setConfig('third_session', third_session);
+  static async check(loginCode) {
+    const url = `${this.baseUrl}/auth/check?login_code=${loginCode}`;
+    const data = await this.get(url);
+    return data.result;
   }
 
   /**
@@ -33,19 +44,18 @@ export default class auth extends base {
   }
 
   /**
-   * 获取会话
-   */
-  static async getSession(jsCode) {
-    const appCode = wepy.$instance.globalData.appCode;
-    const url = `${this.baseUrl}/auth/session?code=${jsCode}&app_code=${appCode}`;
-    return await this.get(url);
-  }
-
-  /**
    * 读取权限值
    */
   static async setConfig(key, value) {
     await wepy.setStorage({key: key, data: value});
     wepy.$instance.globalData.auth[key] = value;
+  }
+
+  /**
+   * 删除权限值
+   */
+  static async removeConfig(key) {
+    wepy.$instance.globalData.auth[key] = null;
+    await wepy.removeStorage({key: key});
   }
 }

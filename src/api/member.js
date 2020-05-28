@@ -1,82 +1,73 @@
 import base from './base';
-// import Page from '../utils/Page';
+import Page from '../utils/Page';
 
-export default class member extends base {
+export default class Member extends base {
   /**
-   * 获取会员整合信息
+   * 获取会员信息
    */
-  static info() {
-    return Promise.all([this._member(), this._card()]).then(([member, card]) => {
-      const discount = this.processDiscount(card, member);
-      return {
-        member, card, discount
-      }
-    });
+  static async Info (number) {
+    const url = `${this.baseUrl}/members/number?number=${number}`;
+    return await this.get(url);
   }
+
   /**
-   * 手机验证码
+   * 增加积分信息
    */
-  static async code(phone) {
-    const url = `${this.baseUrl}/members/sms_code?phone=${phone}`;
-    return this.get(url);
+  static async memberAdd (bonusDetail) {
+    const url = `${this.baseUrl}/members/bonus_detail`;
+    return this.post(url, bonusDetail);
   }
+
   /**
-   * 获取会员卡信息
+   * 获取买家会员数据
    */
-  static _card() {
+  static async customerInfo (customerId) {
+    const url = `${this.baseUrl}/members?customer_id=${customerId}`;
+    return await this.get(url);
+  }
+
+  /**
+   * 获取买家会员卡数据
+   */
+  static async cardInfo () {
     const url = `${this.baseUrl}/memberCards`;
-    return this.get(url);
+    return await this.get(url);
   }
+
   /**
-   * 获取会员信息
+   * 编辑自定义折扣
    */
-  static _member() {
+  static customDiscount (member) {
+    const url = `${this.baseUrl}/members/custom_discount`;
+    return this.post(url, member);
+  }
+
+  /**
+   * 历史积分信息
+   */
+  static async bonusPage(customerId) {
+    const url = `${this.baseUrl}/members/bonus_detail?by=create_time&sort=desc&customer_id=${customerId}`;
+    return new Page(url, this.processBonusTransformation.bind(this));
+  }
+  static processBonusTransformation (bonusInfo) {
+    const comment = {};
+    if (bonusInfo.addBonus > 0) {
+      comment.costMoney = `消费金额：￥ ${bonusInfo.costMoney.toFixed(2)}`;
+    } else {
+      comment.costMoney = `抵扣金额：￥ ${bonusInfo.costMoney.toFixed(2)}`;
+    }
+    comment.addBonus = bonusInfo.addBonus;
+    comment.createTime = bonusInfo.createTime;
+    comment.orderId = bonusInfo.orderId;
+    comment.typeDesc = bonusInfo.typeDesc;
+    return comment;
+  }
+
+  /**
+   * 卖家为用户开通会员卡
+   */
+  static async registe(param) {
     const url = `${this.baseUrl}/members`;
-    return this.get(url);
-  }
-  /**
-   * 获取会员信息
-   */
-  static bonusPankList() {
-    const url = `${this.baseUrl}/members/bonus_top?count_type=WEEK&from=0&limit=20`;
-    return this.get(url);
-  }
-  /**
-   * 处理折扣率
-   */
-  static processDiscount(card, member) {
-    if (member == null || card == null) {
-      return null;
-    }
-    if (card.supplyDiscount != 1) {
-      return null;
-    }
-    // 计算折扣
-    const {discountRule, customDiscount} = member;
-    if (discountRule == null) {
-      return null;
-    }
-    let discount = 100;
-    if (customDiscount > 0 && customDiscount <= 100) {
-      // 自定义折扣
-      discount = customDiscount;
-    } else if (discountRule != null && discountRule.discount < 100) {
-      // 等级折扣
-      discount = discountRule.discount;
-    }
-    // 判断异常情况
-    if (discount == null || discount >= 100 || discount <= 0) {
-      return null;
-    }
-    const {discountCategoryLists} = discountRule;
-    if (discountCategoryLists == null || discountCategoryLists.length < 1) {
-      return null;
-    }
-    const categories = discountRule.discountCategoryLists.map(item => item.categoryId);
-    return {
-      level: discountRule.levelName,
-      categories,
-      rate: discount
-    };
+    return this.post(url, param);
   }
 }
